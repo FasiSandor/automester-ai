@@ -32,3 +32,6 @@
 - Do not continue driving for serious safety symptoms.
 - No secrets in source, logs or client bundles.
 - No publicly accessible AI endpoint in production without auth and rate limiting.
+
+## 2026-10-15 milestone
+Neon project created, Better Auth provisioned, SQL tables created. Source adds owner allowlisting and cloud-backed garage/repairs/messages. Pending real build validation, configured credentials, photo storage and rate limits. Do not deploy production until configured and validated.

@@ -1,28 +1,24 @@
 # AutoMester AI
+Private-use automotive diagnostic assistant. Next.js + Neon PostgreSQL + Neon Auth.
 
-Hungarian-language, private-use automotive diagnostics PWA starter.
+## Setup
+- Neon project already provisioned (project ID: `fragrant-base-20101402`, Frankfurt).
+- Neon Auth provisioned as Better Auth.
+- Set `DATABASE_URL`, `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET` and `ALLOWED_OWNER_EMAIL` privately in hosting environment; **never commit secrets**.
+- `ALLOWED_OWNER_EMAIL` must match the email used to register; other accounts cannot access garage or AI.
+- Install `npm install`, then `npm run typecheck && npm run build`.
+- `AI_API_KEY` is optional; no key means explicit rule-based mode.
 
-## Modules
-- Symptom triage with safety-first DTC explanation
-- Optional AI chat (OpenAI-compatible API configured server-side)
-- Vehicle garage, diagnostic histories and repair logs (local browser draft mode)
-- Part identification checklist and direct merchant searches
+## Features
+- Password sign-in with server-checked owner allowlist.
+- Persistent Neon vehicles, repairs, and diagnostic history.
+- Diagnostic chat with optional AI fallback and safety warnings.
+- Manual DTC input; parts merchant navigation.
 
-## Start
-```bash
-npm install
-cp .env.example .env.local
-npm run dev
-npm run typecheck
-npm run build
-```
-
-## Status and limitations
-This is a **development baseline**, not a production-ready private service.
-- Without an AI key, an explicitly labeled offline rules-based response is shown.
-- Browser-local draft data is **not encrypted cloud storage** and does not sync.
-- Neon schema is included; database connection and Neon Auth integration remain to be done.
-- OCR/photo diagnostics, private object storage, automatic live prices, and vehicle fitment validation remain to be integrated.
-- Do **not** deploy publicly before authentication and authorization are enforced.
-
-See docs/PLAN.md for acceptance criteria. Never commit API keys.
+## Outstanding before public/production launch
+- Limit AI requests per session/user and enforce spend quota.
+- Implement private image storage and OCR; currently unavailable.
+- Merchant real-time quotes and true vehicle compatibility not integrated.
+- Review Neon Auth email verification, account creation policy, deployment env variables, trusted domains.
+- Run dependency/security audit and validate real GitHub Actions checks before deploy.
+- Add automated backup/export and robust observability.

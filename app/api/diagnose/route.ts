@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { owner } from "@/lib/auth/server";
+import { db } from "@/lib/db";
+export const runtime="nodejs";
 import { localAdvice, safetyWarning } from "@/lib/diagnostics";
 const Input=z.object({message:z.string().min(2).max(4000),vehicle:z.string().max(500).optional(),history:z.array(z.object({role:z.enum(["user","assistant"]),content:z.string().max(4000)})).max(12).optional()});
 export async function POST(req:Request) {
+ const userId=await owner();
+ if(!userId)return NextResponse.json({error:"Hozzáférés megtagadva"},{status:401});
  let json:unknown;
  try { json=await req.json(); } catch {return NextResponse.json({error:"Érvénytelen kérés."},{status:400});}
  const parsed=Input.safeParse(json);
@@ -10,7 +15,7 @@ export async function POST(req:Request) {
  const {message,vehicle,history=[]}=parsed.data;
  const danger=safetyWarning(message);
  const key=process.env.AI_API_KEY;
- if(!key) return NextResponse.json({reply:localAdvice(message),mode:"rules",warning:danger});
+ if(!key) { const reply=localAdvice(message); await saveMessages(userId,message,reply,"rules"); return NextResponse.json({reply,mode:"rules",warning:danger}); }
  try {
   const url=(process.env.AI_BASE_URL||"https://api.openai.com/v1").replace(/\/$/,"")+"/chat/completions";
   const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),18000);
@@ -20,6 +25,18 @@ export async function POST(req:Request) {
   const body=await upstream.json();
   const reply=body?.choices?.[0]?.message?.content;
   if(typeof reply!=="string"||!reply.trim()) throw new Error("Empty reply");
-  return NextResponse.json({reply:danger?danger+"\n\n"+reply:reply,mode:"ai",warning:danger});
- } catch { return NextResponse.json({reply:localAdvice(message),mode:"rules-fallback",warning:danger}); }
+  const output=danger?danger+"\n\n"+reply:reply;
+  await saveMessages(userId,message,output,"ai");
+  return NextResponse.json({reply:output,mode:"ai",warning:danger});
+ } catch { const reply=localAdvice(message); await saveMessages(userId,message,reply,"rules-fallback"); return NextResponse.json({reply,mode:"rules-fallback",warning:danger}); }
+}
+
+async function saveMessages(userId:string, question:string, answer:string,mode:string){
+ try {const sql=db();
+  let sessions=await sql`SELECT id FROM diagnostic_sessions WHERE owner_id=${userId} ORDER BY created_at DESC LIMIT 1`;
+  if(!sessions.length)sessions=await sql`INSERT INTO diagnostic_sessions(owner_id,title) VALUES(${userId},'Diagnosztika') RETURNING id`;
+  const sessionId=sessions[0].id as string;
+  await sql`INSERT INTO diagnostic_messages(session_id,role,content) VALUES(${sessionId},'user',${question})`;
+  await sql`INSERT INTO diagnostic_messages(session_id,role,content,response_mode) VALUES(${sessionId},'assistant',${answer},${mode})`;
+ }catch{ /* Do not leak database details to the client */ }
 }
