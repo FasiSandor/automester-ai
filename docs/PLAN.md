@@ -35,3 +35,6 @@
 
 ## 2026-10-15 milestone
 Neon project created, Better Auth provisioned, SQL tables created. Source adds owner allowlisting and cloud-backed garage/repairs/messages. Pending real build validation, configured credentials, photo storage and rate limits. Do not deploy production until configured and validated.
+
+## 2026-10-15 AI quota
+AI requests are guarded by an atomic daily Neon counter (20 per UTC calendar day per owner). Configure an additional spending cap at the provider. Deployment still blocked until CI/build and Neon Auth end-to-end verified.

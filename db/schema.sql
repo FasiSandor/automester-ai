@@ -27,3 +27,5 @@ CREATE TABLE IF NOT EXISTS repairs(
 );
 CREATE INDEX IF NOT EXISTS repairs_owner_idx ON repairs(owner_id);
 -- Photo object keys must be scoped by owner, signed URLs only.
+
+CREATE TABLE IF NOT EXISTS ai_daily_usage (owner_id text NOT NULL, usage_date date NOT NULL, requests integer NOT NULL DEFAULT 0 CHECK(requests >= 0), PRIMARY KEY(owner_id,usage_date));
