@@ -15,6 +15,18 @@ export async function POST(req:Request) {
  const {message,vehicle,history=[]}=parsed.data;
  const danger=safetyWarning(message);
  const key=process.env.AI_API_KEY;
+ if (key) {
+   try {
+     const sql=db();
+     const limit=await sql`INSERT INTO ai_daily_usage(owner_id,usage_date,requests)
+       VALUES(${userId}, (now() AT TIME ZONE 'UTC')::date,1)
+       ON CONFLICT(owner_id,usage_date) DO UPDATE SET requests=ai_daily_usage.requests+1
+       WHERE ai_daily_usage.requests < 20 RETURNING requests`;
+     if(!limit.length) return NextResponse.json({error:"A napi AI-keret elfogyott (20 kérés)."},{status:429});
+   } catch {
+     return NextResponse.json({error:"Az AI-korlát ellenőrzése nem sikerült."},{status:503});
+   }
+ }
  if(!key) { const reply=localAdvice(message); await saveMessages(userId,message,reply,"rules"); return NextResponse.json({reply,mode:"rules",warning:danger}); }
  try {
   const url=(process.env.AI_BASE_URL||"https://api.openai.com/v1").replace(/\/$/,"")+"/chat/completions";
