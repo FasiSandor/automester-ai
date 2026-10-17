@@ -13,4 +13,8 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npm run typecheck
-      - run: npm run build
+      - name: Build with CI-only placeholder auth config
+        env:
+          NEON_AUTH_BASE_URL: https://example.invalid/auth
+          NEON_AUTH_COOKIE_SECRET: ci-only-build-placeholder-not-a-production-secret-0123456789
+        run: npm run build
