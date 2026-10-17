@@ -29,7 +29,7 @@ export default function Login() {
     setBusy(true); setError(""); setNotice("");
     try {
       if (verify) {
-        if (!/^\\d{4,10}$/.test(otp.trim())) throw new Error("Írd be az e-mailben kapott ellenőrző kódot.");
+        if (!/^[0-9]{4,10}$/.test(otp.trim())) throw new Error("Írd be az e-mailben kapott ellenőrző kódot.");
         await otpRequest("verify-email", { email: email.trim(), otp: otp.trim() });
         setVerify(false); setSignup(false); setOtp(""); setNotice("E-mail-cím megerősítve! Most jelentkezz be a jelszavaddal.");
         return;
@@ -73,7 +73,7 @@ export default function Login() {
         <p className="muted">E-mail ellenőrzése: <strong>{email}</strong></p>
         <label>E-mailben kapott kód
           <input type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" value={otp}
-            onChange={e => setOtp(e.target.value.replace(/\\D/g, ""))} placeholder="Ellenőrző kód" required />
+            onChange={e => setOtp(e.target.value.replace(/[^0-9]/g, ""))} placeholder="Ellenőrző kód" required />
         </label>
       </> : <>
         {signup && <label>Név<input value={name} onChange={e => setName(e.target.value)} required /></label>}
