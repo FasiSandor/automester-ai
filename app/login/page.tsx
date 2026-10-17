@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { authClient } from "@/lib/auth/client";
 
-export default function Login() {
+function validEmail(value: string) {\n  const address = value.trim();\n  const at = address.indexOf("@");\n  return at > 0 && at === address.lastIndexOf("@") && address.indexOf(".", at + 2) > at + 1 && !address.includes(" ");\n}\n\nexport default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -29,7 +29,7 @@ export default function Login() {
     setBusy(true); setError(""); setNotice("");
     try {
       if (verify) {
-        if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email.trim())) throw new Error("Adj meg egy érvényes e-mail-címet.");
+        if (!validEmail(email)) throw new Error("Adj meg egy érvényes e-mail-címet.");
         if (!/^[0-9]{4,10}$/.test(otp.trim())) throw new Error("Írd be az e-mailben kapott ellenőrző kódot.");
         await otpRequest("verify-email", { email: email.trim(), otp: otp.trim() });
         setVerify(false); setSignup(false); setOtp(""); setNotice("E-mail-cím megerősítve! Most jelentkezz be a jelszavaddal.");
@@ -61,7 +61,7 @@ export default function Login() {
   async function resend() {
     setBusy(true); setError(""); setNotice("");
     try {
-      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email.trim())) throw new Error("Adj meg egy érvényes e-mail-címet.");
+      if (!validEmail(email)) throw new Error("Adj meg egy érvényes e-mail-címet.");
       await otpRequest("send-verification-otp", { email: email.trim(), type: "email-verification" });
       setNotice("Új kódot kértünk. Nézd meg az e-mail-fiókodat (a spam mappát is).");
     } catch (err) { setError(err instanceof Error ? err.message : "Nem sikerült új kódot kérni."); }
