@@ -33,7 +33,7 @@ export async function POST(req:Request) {
      return NextResponse.json({error:"Az AI-korlát ellenőrzése nem sikerült."},{status:503});
    }
  }
- if(!key) { const reply=contextualAdvice(message,history,vehicle); await saveMessages(userId,sessionId,message,reply,"rules"); return NextResponse.json({reply,mode:"rules",warning:danger}); }
+ if(!key) { const reply=contextualAdvice(message,history,vehicle); const savedId=await saveMessages(userId,sessionId,message,reply,"rules"); return NextResponse.json({reply,mode:"rules",warning:danger,sessionId:savedId}); }
  try {
   const url=(process.env.AI_BASE_URL||"https://api.openai.com/v1").replace(/\/$/,"")+"/chat/completions";
   const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),18000);
@@ -44,16 +44,16 @@ export async function POST(req:Request) {
   const reply=body?.choices?.[0]?.message?.content;
   if(typeof reply!=="string"||!reply.trim()) throw new Error("Empty reply");
   const output=danger?danger+"\n\n"+reply:reply;
-  await saveMessages(userId,sessionId,message,output,"ai");
-  return NextResponse.json({reply:output,mode:"ai",warning:danger});
- } catch { const reply=contextualAdvice(message,history,vehicle); await saveMessages(userId,sessionId,message,reply,"rules-fallback"); return NextResponse.json({reply,mode:"rules-fallback",warning:danger}); }
+  const savedId=await saveMessages(userId,sessionId,message,output,"ai");
+  return NextResponse.json({reply:output,mode:"ai",warning:danger,sessionId:savedId});
+ } catch { const reply=contextualAdvice(message,history,vehicle); const savedId=await saveMessages(userId,sessionId,message,reply,"rules-fallback"); return NextResponse.json({reply,mode:"rules-fallback",warning:danger,sessionId:savedId}); }
 }
 
 async function saveMessages(userId:string,sessionId:string|undefined, question:string, answer:string,mode:string){
- try {const sql=db();
+ const sql=db();
   let activeSessionId=sessionId;
   if(!activeSessionId){const rows=await sql`INSERT INTO diagnostic_sessions(owner_id,title) VALUES(${userId},${question.slice(0,90)}) RETURNING id`;activeSessionId=rows[0].id as string;}
   await sql`INSERT INTO diagnostic_messages(session_id,role,content) VALUES(${activeSessionId},'user',${question})`;
   await sql`INSERT INTO diagnostic_messages(session_id,role,content,response_mode) VALUES(${activeSessionId},'assistant',${answer},${mode})`;
- }catch{ /* Do not leak database details to the client */ }
+  return activeSessionId;
 }
