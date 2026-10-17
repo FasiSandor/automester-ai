@@ -36,17 +36,19 @@ export async function POST(req:Request) {
  if(!key) { const reply=contextualAdvice(message,history,vehicle); const savedId=await saveMessages(userId,sessionId,message,reply,"rules"); return NextResponse.json({reply,mode:"rules",warning:danger,sessionId:savedId}); }
  try {
   const url=(process.env.AI_BASE_URL||"https://api.openai.com/v1").replace(/\/$/,"")+"/chat/completions";
-  const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),18000);
+  const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),45000);
   let upstream:Response;
-  try { upstream=await fetch(url,{method:"POST",signal:controller.signal,headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.AI_MODEL||"gpt-4.1-mini",temperature:0.2,max_tokens:850,messages:[{role:"system",content:"Magyarul válaszoló, biztonságközpontú, segítőkész autódiagnosztikai asszisztens vagy. FIGYELMESEN OLVASD VÉGIG a beszélgetés korábbi felhasználói üzeneteit. A már megadott autótípust, évjáratot és tünetet ne kérdezd meg újra, akkor sem, ha a külön kiválasztott jármű mező üres. Ha a felhasználó csak annyit kérdez, hogy mit javasolsz, a már leírt probléma alapján ADJ AZONNAL konkrét, gyakorlatias lehetséges okokat és 2-4 sorrendbe állított ellenőrzési lépést. Csak egy valóban hiányzó, döntő kérdést tegyél fel a végén, ha szükséges. A tényt különítsd el a feltételezéstől, sose állíts bizonyítatlan alkatrészhibát tényként. Ne találj ki hibakódot, cikkszámot, kompatibilitást vagy árat. Kritikus fék-, kormány-, ajtózár-, füst- és túlmelegedési kockázatnál jelezd az autó használatának veszélyét. Kerüld a sablonos űrlapszerű kérdéssorokat és a Markdown táblázatokat; rövid, jól olvasható bekezdésekben válaszolj."},{role:"system",content:diagnosticContext},...history,{role:"user",content:"Legújabb felhasználói üzenet: "+message}]})});} finally {clearTimeout(timeout);}
-  if(!upstream.ok) throw new Error("AI unavailable");
+  try { upstream=await fetch(url,{method:"POST",signal:controller.signal,headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.AI_MODEL||"gpt-4.1-mini",temperature:0.2,max_tokens:3000,messages:[{role:"system",content:"Magyarul válaszoló, biztonságközpontú, segítőkész autódiagnosztikai asszisztens vagy. FIGYELMESEN OLVASD VÉGIG a beszélgetés korábbi felhasználói üzeneteit. A már megadott autótípust, évjáratot és tünetet ne kérdezd meg újra, akkor sem, ha a külön kiválasztott jármű mező üres. Ha a felhasználó csak annyit kérdez, hogy mit javasolsz, a már leírt probléma alapján ADJ AZONNAL konkrét, gyakorlatias lehetséges okokat és 2-4 sorrendbe állított ellenőrzési lépést. Csak egy valóban hiányzó, döntő kérdést tegyél fel a végén, ha szükséges. A tényt különítsd el a feltételezéstől, sose állíts bizonyítatlan alkatrészhibát tényként. Ne találj ki hibakódot, cikkszámot, kompatibilitást vagy árat. Kritikus fék-, kormány-, ajtózár-, füst- és túlmelegedési kockázatnál jelezd az autó használatának veszélyét. Kerüld a sablonos űrlapszerű kérdéssorokat és a Markdown táblázatokat; rövid, jól olvasható bekezdésekben válaszolj."},{role:"system",content:diagnosticContext},...history,{role:"user",content:"Legújabb felhasználói üzenet: "+message}]})});} finally {clearTimeout(timeout);}
+  if(!upstream.ok) { console.error("diagnosis-ai-upstream",upstream.status); throw new Error("AI unavailable"); }
   const body=await upstream.json();
   const reply=body?.choices?.[0]?.message?.content;
+  const finishReason=body?.choices?.[0]?.finish_reason;
+  if(finishReason==="length") throw new Error("AI response truncated");
   if(typeof reply!=="string"||!reply.trim()) throw new Error("Empty reply");
   const output=danger?danger+"\n\n"+reply:reply;
   const savedId=await saveMessages(userId,sessionId,message,output,"ai");
   return NextResponse.json({reply:output,mode:"ai",warning:danger,sessionId:savedId});
- } catch { const reply=contextualAdvice(message,history,vehicle); const savedId=await saveMessages(userId,sessionId,message,reply,"rules-fallback"); return NextResponse.json({reply,mode:"rules-fallback",warning:danger,sessionId:savedId}); }
+ } catch (error) { console.error("diagnosis-ai-fallback",error instanceof Error?error.message:"unknown"); const reply=contextualAdvice(message,history,vehicle); const savedId=await saveMessages(userId,sessionId,message,reply,"rules-fallback"); return NextResponse.json({reply,mode:"rules-fallback",warning:danger,sessionId:savedId}); }
 }
 
 async function saveMessages(userId:string,sessionId:string|undefined, question:string, answer:string,mode:string){
