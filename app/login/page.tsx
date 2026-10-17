@@ -29,6 +29,7 @@ export default function Login() {
     setBusy(true); setError(""); setNotice("");
     try {
       if (verify) {
+        if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email.trim())) throw new Error("Adj meg egy érvényes e-mail-címet.");
         if (!/^[0-9]{4,10}$/.test(otp.trim())) throw new Error("Írd be az e-mailben kapott ellenőrző kódot.");
         await otpRequest("verify-email", { email: email.trim(), otp: otp.trim() });
         setVerify(false); setSignup(false); setOtp(""); setNotice("E-mail-cím megerősítve! Most jelentkezz be a jelszavaddal.");
@@ -60,6 +61,7 @@ export default function Login() {
   async function resend() {
     setBusy(true); setError(""); setNotice("");
     try {
+      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email.trim())) throw new Error("Adj meg egy érvényes e-mail-címet.");
       await otpRequest("send-verification-otp", { email: email.trim(), type: "email-verification" });
       setNotice("Új kódot kértünk. Nézd meg az e-mail-fiókodat (a spam mappát is).");
     } catch (err) { setError(err instanceof Error ? err.message : "Nem sikerült új kódot kérni."); }
@@ -70,7 +72,9 @@ export default function Login() {
     <form onSubmit={submit} className="panel" style={{ maxWidth:420, width:"100%" }}>
       <h1>AutoMester AI</h1><p className="muted">Privát garázs · Neon Auth</p>
       {verify ? <>
-        <p className="muted">E-mail ellenőrzése: <strong>{email}</strong></p>
+        <label>E-mail-cím
+          <input type="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="E-mail-címed" required />
+        </label>
         <label>E-mailben kapott kód
           <input type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" value={otp}
             onChange={e => setOtp(e.target.value.replace(/[^0-9]/g, ""))} placeholder="Ellenőrző kód" required />
