@@ -47,6 +47,9 @@ export function contextualAdvice(message: string, history: {role:"user"|"assista
    ];
    return (warning?warning+"\n\n":"")+checks.join("\n\n");
  }
+ if (/(korm[aá]ny|hang|z[oö]rg|s[ií]pol)/i.test(context) && /20\s*(km\/h|km\/ora|km\/óra|kmh)|husz\s*(km|kilom[eé]ter)/i.test(context)) {
+   return (warning?warning+"\n\n":"")+"A leírásod alapján a hang következetesen körülbelül 20 km/h-nál jelentkezik, nem egy általános kormányzaj. Ez felvethet sebességküszöbhöz kötött elektronikus jelzést vagy zár/aktuátor működést is, de mechanikai ok sem zárható ki.\n\n1. Figyeld meg, a hang egyetlen rövid kattanás/csipogás, vagy addig tart, amíg 20 km/h-val haladsz.\n2. Figyeld meg, ugyanott szól-e újra, amikor lassítás után ismét eléred a 20 km/h-t.\n3. Ellenőrizd a műszerfalon a jelzéseket és az ajtók biztonságos záródását, de menet közben ne szerelj vagy keresd kézzel a hang forrását.\n\nEgy fontos kérdés: egyszeri kattanás, csipogás vagy folyamatos súrlódó/zörgő hang hallatszik?\n\nAz élő AI jelenleg nem elérhető, ez korlátozott tartalék-válasz.";
+ }
  if (/f[eé]k|korm[aá]ny|fut[oó]m[uű]|akku|ind[ií]t|h[uű]t[oő]|motor|v[aá]lt[oó]/i.test(context)) {
    return (warning?warning+"\n\n":"")+"A leírt tünetet vettem alapul, de egyetlen leírásból nem lehet biztos alkatrészhibát megállapítani. Írd meg, hogy álló helyzetben vagy menet közben jelentkezik-e, illetve hallasz-e rendellenes hangot. Ezek alapján célzott ellenőrzési sorrendet adok.\n\nJelenleg szabályalapú segítség működik, nem élő AI-elemzés.";
  }

@@ -4,7 +4,7 @@ import { owner } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 export const runtime="nodejs";
 import { contextualAdvice, safetyWarning } from "@/lib/diagnostics";
-const Input=z.object({message:z.string().min(2).max(4000),vehicle:z.string().max(500).optional(),history:z.array(z.object({role:z.enum(["user","assistant"]),content:z.string().max(4000)})).max(12).optional()});
+const Input=z.object({sessionId:z.string().uuid().optional(),message:z.string().min(2).max(4000),vehicle:z.string().max(500).optional(),history:z.array(z.object({role:z.enum(["user","assistant"]),content:z.string().max(4000)})).max(12).optional()});
 export async function POST(req:Request) {
  const userId=await owner();
  if(!userId)return NextResponse.json({error:"Hozzáférés megtagadva"},{status:401});
@@ -12,7 +12,8 @@ export async function POST(req:Request) {
  try { json=await req.json(); } catch {return NextResponse.json({error:"Érvénytelen kérés."},{status:400});}
  const parsed=Input.safeParse(json);
  if(!parsed.success) return NextResponse.json({error:"Érvénytelen bemenet."},{status:400});
- const {message,vehicle,history=[]}=parsed.data;
+ const {message,vehicle,history=[],sessionId}=parsed.data;
+ if(sessionId){const sql=db();const found=await sql`SELECT id FROM diagnostic_sessions WHERE owner_id=${userId} AND id=${sessionId}`;if(!found.length)return NextResponse.json({error:"Nem található a beszélgetés."},{status:404});}
  const danger=safetyWarning(message);
  // Keep all available recent user facts separate from assistant guesses.
  const userFacts=history.filter(item=>item.role==="user").map(item=>item.content);
@@ -32,28 +33,30 @@ export async function POST(req:Request) {
      return NextResponse.json({error:"Az AI-korlát ellenőrzése nem sikerült."},{status:503});
    }
  }
- if(!key) { const reply=contextualAdvice(message,history,vehicle); await saveMessages(userId,message,reply,"rules"); return NextResponse.json({reply,mode:"rules",warning:danger}); }
+ if(!key) { const reply=contextualAdvice(message,history,vehicle); const savedId=await saveMessages(userId,sessionId,message,reply,"rules"); return NextResponse.json({reply,mode:"rules",warning:danger,sessionId:savedId}); }
  try {
   const url=(process.env.AI_BASE_URL||"https://api.openai.com/v1").replace(/\/$/,"")+"/chat/completions";
-  const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),18000);
+  const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),45000);
   let upstream:Response;
-  try { upstream=await fetch(url,{method:"POST",signal:controller.signal,headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.AI_MODEL||"gpt-4.1-mini",temperature:0.2,max_tokens:850,messages:[{role:"system",content:"Magyarul válaszoló, biztonságközpontú, segítőkész autódiagnosztikai asszisztens vagy. FIGYELMESEN OLVASD VÉGIG a beszélgetés korábbi felhasználói üzeneteit. A már megadott autótípust, évjáratot és tünetet ne kérdezd meg újra, akkor sem, ha a külön kiválasztott jármű mező üres. Ha a felhasználó csak annyit kérdez, hogy mit javasolsz, a már leírt probléma alapján ADJ AZONNAL konkrét, gyakorlatias lehetséges okokat és 2-4 sorrendbe állított ellenőrzési lépést. Csak egy valóban hiányzó, döntő kérdést tegyél fel a végén, ha szükséges. A tényt különítsd el a feltételezéstől, sose állíts bizonyítatlan alkatrészhibát tényként. Ne találj ki hibakódot, cikkszámot, kompatibilitást vagy árat. Kritikus fék-, kormány-, ajtózár-, füst- és túlmelegedési kockázatnál jelezd az autó használatának veszélyét. Kerüld a sablonos űrlapszerű kérdéssorokat és a Markdown táblázatokat; rövid, jól olvasható bekezdésekben válaszolj."},{role:"system",content:diagnosticContext},...history,{role:"user",content:"Legújabb felhasználói üzenet: "+message}]})});} finally {clearTimeout(timeout);}
-  if(!upstream.ok) throw new Error("AI unavailable");
+  try { upstream=await fetch(url,{method:"POST",signal:controller.signal,headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.AI_MODEL||"gpt-4.1-mini",temperature:0.2,max_tokens:3000,reasoning_effort:"none",messages:[{role:"system",content:"Magyarul válaszoló, biztonságközpontú, segítőkész autódiagnosztikai asszisztens vagy. FIGYELMESEN OLVASD VÉGIG a beszélgetés korábbi felhasználói üzeneteit. A már megadott autótípust, évjáratot és tünetet ne kérdezd meg újra, akkor sem, ha a külön kiválasztott jármű mező üres. Ha a felhasználó csak annyit kérdez, hogy mit javasolsz, a már leírt probléma alapján ADJ AZONNAL konkrét, gyakorlatias lehetséges okokat és 2-4 sorrendbe állított ellenőrzési lépést. Csak egy valóban hiányzó, döntő kérdést tegyél fel a végén, ha szükséges. A tényt különítsd el a feltételezéstől, sose állíts bizonyítatlan alkatrészhibát tényként. Ne találj ki hibakódot, cikkszámot, kompatibilitást vagy árat. Kritikus fék-, kormány-, ajtózár-, füst- és túlmelegedési kockázatnál jelezd az autó használatának veszélyét. Kerüld a sablonos űrlapszerű kérdéssorokat és a Markdown táblázatokat; rövid, jól olvasható bekezdésekben válaszolj."},{role:"system",content:diagnosticContext},...history,{role:"user",content:"Legújabb felhasználói üzenet: "+message}]})});} finally {clearTimeout(timeout);}
+  if(!upstream.ok) { console.error("diagnosis-ai-upstream",upstream.status); throw new Error("AI unavailable"); }
   const body=await upstream.json();
   const reply=body?.choices?.[0]?.message?.content;
+  const finishReason=body?.choices?.[0]?.finish_reason;
+  if(finishReason==="length") throw new Error("AI response truncated");
   if(typeof reply!=="string"||!reply.trim()) throw new Error("Empty reply");
   const output=danger?danger+"\n\n"+reply:reply;
-  await saveMessages(userId,message,output,"ai");
-  return NextResponse.json({reply:output,mode:"ai",warning:danger});
- } catch { const reply=contextualAdvice(message,history,vehicle); await saveMessages(userId,message,reply,"rules-fallback"); return NextResponse.json({reply,mode:"rules-fallback",warning:danger}); }
+  let savedId:string;
+  try {savedId=await saveMessages(userId,sessionId,message,output,"ai");} catch {return NextResponse.json({error:"Az elemzés elkészült, de a mentése nem sikerült. Próbáld újra."},{status:503});}
+  return NextResponse.json({reply:output,mode:"ai",warning:danger,sessionId:savedId});
+ } catch (error) { console.error("diagnosis-ai-fallback",error instanceof Error?error.message:"unknown"); const reply=contextualAdvice(message,history,vehicle); try {const savedId=await saveMessages(userId,sessionId,message,reply,"rules-fallback"); return NextResponse.json({reply,mode:"rules-fallback",warning:danger,sessionId:savedId});}catch{return NextResponse.json({error:"Az AI nem elérhető, és a válasz mentése sem sikerült."},{status:503});} }
 }
 
-async function saveMessages(userId:string, question:string, answer:string,mode:string){
- try {const sql=db();
-  let sessions=await sql`SELECT id FROM diagnostic_sessions WHERE owner_id=${userId} ORDER BY created_at DESC LIMIT 1`;
-  if(!sessions.length)sessions=await sql`INSERT INTO diagnostic_sessions(owner_id,title) VALUES(${userId},'Diagnosztika') RETURNING id`;
-  const sessionId=sessions[0].id as string;
-  await sql`INSERT INTO diagnostic_messages(session_id,role,content) VALUES(${sessionId},'user',${question})`;
-  await sql`INSERT INTO diagnostic_messages(session_id,role,content,response_mode) VALUES(${sessionId},'assistant',${answer},${mode})`;
- }catch{ /* Do not leak database details to the client */ }
+async function saveMessages(userId:string,sessionId:string|undefined, question:string, answer:string,mode:string){
+ const sql=db();
+  let activeSessionId=sessionId;
+  if(!activeSessionId){const rows=await sql`INSERT INTO diagnostic_sessions(owner_id,title) VALUES(${userId},${question.slice(0,90)}) RETURNING id`;activeSessionId=rows[0].id as string;}
+  await sql`INSERT INTO diagnostic_messages(session_id,role,content) VALUES(${activeSessionId},'user',${question})`;
+  await sql`INSERT INTO diagnostic_messages(session_id,role,content,response_mode) VALUES(${activeSessionId},'assistant',${answer},${mode})`;
+  return activeSessionId;
 }
