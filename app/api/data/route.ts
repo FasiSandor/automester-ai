@@ -11,8 +11,8 @@ export async function GET(){
  try{const sql=db();const [vehicles,repairs,sessions]=await Promise.all([
  sql`SELECT id,brand,model,COALESCE(model_year::text,'') AS year,COALESCE(engine,'') AS engine,COALESCE(mileage::text,'') AS km FROM vehicles WHERE owner_id=${id} ORDER BY created_at`,
  sql`SELECT id,vehicle_id AS "vehicleId",description,COALESCE(completed_on::text,'') AS date,COALESCE(mileage::text,'') AS km,COALESCE(amount_huf::text,'') AS cost FROM repairs WHERE owner_id=${id} ORDER BY created_at DESC`,
- sql`SELECT m.role,m.content,m.response_mode AS mode,m.created_at AS at FROM diagnostic_messages m JOIN diagnostic_sessions s ON s.id=m.session_id WHERE s.owner_id=${id} ORDER BY m.created_at,m.id LIMIT 200`
- ]);return NextResponse.json({vehicles,repairs,entries:sessions});}
+ sql`SELECT id,title,vehicle_id AS "vehicleId",created_at AS "createdAt" FROM diagnostic_sessions WHERE owner_id=${id} ORDER BY created_at DESC LIMIT 100`
+ ]);return NextResponse.json({vehicles,repairs,sessions,entries:[]});}
  catch{return NextResponse.json({error:"Adatbázishiba"},{status:503});}
 }
 export async function POST(request:Request){
@@ -26,7 +26,10 @@ export async function POST(request:Request){
  if(action==="addRepair"){const r=repair.parse(payload.value);const owns=await sql`SELECT id FROM vehicles WHERE owner_id=${id} AND id=${r.vehicleId}`;if(!owns.length)return NextResponse.json({error:"Nincs hozzáférés ehhez az autóhoz"},{status:403});
  const rows=await sql`INSERT INTO repairs(owner_id,vehicle_id,description,completed_on,mileage,amount_huf) VALUES(${id},${r.vehicleId},${r.description},${r.date||null},${toInteger(r.km)},${r.cost.trim()?Number(r.cost):null}) RETURNING id`;return NextResponse.json({id:rows[0].id});}
  if(action==="deleteRepair"){const rid=z.string().uuid().parse(payload.id);await sql`DELETE FROM repairs WHERE owner_id=${id} AND id=${rid}`;return NextResponse.json({ok:true});}
- if(action==="clearMessages"){await sql`DELETE FROM diagnostic_sessions WHERE owner_id=${id}`;return NextResponse.json({ok:true});}
+ if(action==="getSessionMessages"){const sid=z.string().uuid().parse(payload.id);const messages=await sql`SELECT m.role,m.content,m.response_mode AS mode,m.created_at AS at FROM diagnostic_messages m JOIN diagnostic_sessions s ON s.id=m.session_id WHERE s.owner_id=${id} AND s.id=${sid} ORDER BY m.created_at,m.id LIMIT 200`;return NextResponse.json({entries:messages});}
+ if(action==="createSession"){const title=z.string().trim().max(110).optional().parse(payload?.value?.title)||"Új hibakeresés";const vehicleId=payload?.value?.vehicleId ? z.string().uuid().parse(payload.value.vehicleId):null;if(vehicleId){const owns=await sql`SELECT id FROM vehicles WHERE owner_id=${id} AND id=${vehicleId}`;if(!owns.length)return NextResponse.json({error:"Az autó nem található."},{status:403});}const rows=await sql`INSERT INTO diagnostic_sessions(owner_id,title,vehicle_id) VALUES(${id},${title},${vehicleId}) RETURNING id,title,vehicle_id AS "vehicleId",created_at AS "createdAt"`;return NextResponse.json({session:rows[0]});}
+ if(action==="deleteSession"){const sid=z.string().uuid().parse(payload.id);await sql`DELETE FROM diagnostic_sessions WHERE id=${sid} AND owner_id=${id}`;return NextResponse.json({ok:true});}
+ if(action==="clearMessages"){return NextResponse.json({error:"Használd az egyes beszélgetések törlését."},{status:400});}
  return NextResponse.json({error:"Ismeretlen művelet"},{status:400});
  }catch(e){if(e instanceof z.ZodError)return NextResponse.json({error:"Érvénytelen adat"},{status:400});return NextResponse.json({error:"Mentési hiba"},{status:503});}
 }
