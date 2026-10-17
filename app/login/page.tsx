@@ -2,7 +2,13 @@
 import { useState } from "react";
 import { authClient } from "@/lib/auth/client";
 
-function validEmail(value: string) {\n  const address = value.trim();\n  const at = address.indexOf("@");\n  return at > 0 && at === address.lastIndexOf("@") && address.indexOf(".", at + 2) > at + 1 && !address.includes(" ");\n}\n\nexport default function Login() {
+function validEmail(value: string) {
+  const address = value.trim();
+  const at = address.indexOf("@");
+  return at > 0 && at === address.lastIndexOf("@") && address.indexOf(".", at + 2) > at + 1 && !address.includes(" ");
+}
+
+export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
