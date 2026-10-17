@@ -14,6 +14,11 @@ export async function POST(req:Request) {
  if(!parsed.success) return NextResponse.json({error:"Érvénytelen bemenet."},{status:400});
  const {message,vehicle,history=[]}=parsed.data;
  const danger=safetyWarning(message);
+ // Keep all available recent user facts separate from assistant guesses.
+ const userFacts=history.filter(item=>item.role==="user").map(item=>item.content);
+ const vehicleContext=vehicle?.trim() || "Nincs külön jármű kiválasztva; a beszélgetésben megadott típust és évjáratot használd.";
+ const previousFacts=userFacts.length ? userFacts.join("\n- ") : "Nincs korábbi felhasználói üzenet.";
+ const diagnosticContext="A felhasználó által már közölt adatok (ezekre ne kérdezz rá újra):\n- "+previousFacts+"\nKiválasztott jármű: "+vehicleContext;
  const key=process.env.AI_API_KEY;
  if (key) {
    try {
@@ -32,7 +37,7 @@ export async function POST(req:Request) {
   const url=(process.env.AI_BASE_URL||"https://api.openai.com/v1").replace(/\/$/,"")+"/chat/completions";
   const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),18000);
   let upstream:Response;
-  try { upstream=await fetch(url,{method:"POST",signal:controller.signal,headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.AI_MODEL||"gpt-4.1-mini",temperature:0.2,max_tokens:850,messages:[{role:"system",content:"Magyar nyelvű, biztonságközpontú autódiagnosztikai segéd vagy. Különítsd el a tényeket, hipotéziseket és ellenőrzési lépéseket. Nem állíthatod hogy alkatrész biztosan hibás mérés nélkül. Ne találj ki hibakód-definíciókat, cikkszámokat, árakat vagy kompatibilitást. Veszélyes fék, kormány, füst, túlmelegedés vagy villogó motorhiba-jelző esetén előbb figyelmeztess a közlekedés elkerülésére. Rövid, célzott kérdéseket tegyél fel."},...history,{role:"user",content:"Jármű: "+(vehicle||"nincs megadva")+"\nTünet vagy kód: "+message}]})});} finally {clearTimeout(timeout);}
+  try { upstream=await fetch(url,{method:"POST",signal:controller.signal,headers:{"Authorization":"Bearer "+key,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.AI_MODEL||"gpt-4.1-mini",temperature:0.2,max_tokens:850,messages:[{role:"system",content:"Magyarul válaszoló, biztonságközpontú, segítőkész autódiagnosztikai asszisztens vagy. FIGYELMESEN OLVASD VÉGIG a beszélgetés korábbi felhasználói üzeneteit. A már megadott autótípust, évjáratot és tünetet ne kérdezd meg újra, akkor sem, ha a külön kiválasztott jármű mező üres. Ha a felhasználó csak annyit kérdez, hogy mit javasolsz, a már leírt probléma alapján ADJ AZONNAL konkrét, gyakorlatias lehetséges okokat és 2-4 sorrendbe állított ellenőrzési lépést. Csak egy valóban hiányzó, döntő kérdést tegyél fel a végén, ha szükséges. A tényt különítsd el a feltételezéstől, sose állíts bizonyítatlan alkatrészhibát tényként. Ne találj ki hibakódot, cikkszámot, kompatibilitást vagy árat. Kritikus fék-, kormány-, ajtózár-, füst- és túlmelegedési kockázatnál jelezd az autó használatának veszélyét. Kerüld a sablonos űrlapszerű kérdéssorokat és a Markdown táblázatokat; rövid, jól olvasható bekezdésekben válaszolj."},{role:"system",content:diagnosticContext},...history,{role:"user",content:"Legújabb felhasználói üzenet: "+message}]})});} finally {clearTimeout(timeout);}
   if(!upstream.ok) throw new Error("AI unavailable");
   const body=await upstream.json();
   const reply=body?.choices?.[0]?.message?.content;
