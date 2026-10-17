@@ -8,7 +8,7 @@ export async function owner() {
   try {
     const result = await auth.getSession();
     const user = result.data?.user;
-    if (!user || user.email?.toLowerCase() !== process.env.ALLOWED_OWNER_EMAIL.toLowerCase()) return null;
+    if (!user || user.emailVerified !== true || user.email?.trim().toLowerCase() !== process.env.ALLOWED_OWNER_EMAIL.trim().toLowerCase()) return null;
     return user.id;
   } catch { return null; }
 }

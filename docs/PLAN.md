@@ -38,3 +38,9 @@ Neon project created, Better Auth provisioned, SQL tables created. Source adds o
 
 ## 2026-10-15 AI quota
 AI requests are guarded by an atomic daily Neon counter (20 per UTC calendar day per owner). Configure an additional spending cap at the provider. Deployment still blocked until CI/build and Neon Auth end-to-end verified.
+
+## Security gate before release — 2026-10-17
+- The server owner guard requires both matching ALLOWED_OWNER_EMAIL and emailVerified === true. This fails closed while email verification is disabled at Neon.
+- Neon Auth currently reports email_password.allow_sign_up=true and require_email_verification=false; enable email verification in Neon Auth console BEFORE attempting the first real sign-in. Then validate the email flow and optionally disable open sign-ups after the owner account exists.
+- No AutoMester Vercel project currently exists. Configure DATABASE_URL, NEON_AUTH_BASE_URL, NEON_AUTH_COOKIE_SECRET, ALLOWED_OWNER_EMAIL in Vercel privately; never expose or commit secrets.
+- Production deployment remains blocked until verified authenticated CRUD smoke tests and CI pass.

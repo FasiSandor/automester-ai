@@ -7,6 +7,7 @@ export default function Login(){
  try {
  const result=signup?await authClient.signUp.email({email,password,name:name||"AutoMester"}):await authClient.signIn.email({email,password});
  if(result.error)throw new Error(result.error.message||"Bejelentkezési hiba");
+ if(signup){setError("A fiók létrejött. A hozzáféréshez előbb igazold az e-mail-címedet. Ha nem érkezik ellenőrző levél, a Neon Auth e-mail-megerősítést be kell kapcsolni.");return;}
  window.location.assign("/");
  }catch(err){setError(err instanceof Error?err.message:"Bejelentkezési hiba");}finally{setBusy(false);}
  }
