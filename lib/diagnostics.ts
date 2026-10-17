@@ -26,3 +26,32 @@ export function localAdvice(message:string):string {
  response+="A diagnózis még nem bizonyított. Mi az autó pontos típusa, évjárata, motorkódja, és mikor jelentkezik a tünet? Világít vagy villog bármilyen figyelmeztető lámpa?";
  return response;
 }
+
+/** Offline fallback: combines recent user context instead of asking the same generic question repeatedly. */
+export function contextualAdvice(message: string, history: {role:"user"|"assistant";content:string}[] = [], vehicle = ""): string {
+ const previous = history.filter(item=>item.role==="user").map(item=>item.content).slice(-6);
+ const context = [...previous,vehicle,message].join(" ").toLocaleLowerCase("hu-HU");
+ const incoming = message.toLocaleLowerCase("hu-HU");
+ const faultCodes = extractCodes([...previous,message].join(" "));
+ const currentCodes = extractCodes(message);
+ const warning = safetyWarning(message) || safetyWarning(previous.join(" "));
+ if (currentCodes.length) return localAdvice(message);
+ if (/ajt[oó]|z[aá]r|zsan[eé]r|ajt[oó]hat[aá]rol[oó]/i.test(context) &&
+     /(akad|szorul|nehezen|k[oö]nnyen|becsuk|nyit|lötyög|mozog|megmozd|hirtelen)/i.test(context)) {
+   const make = /ford\s+focus/i.test(context) ? "A 2011-es Ford Focusnál" : "Az ajtónál";
+   const checks = [
+    make+" az, hogy az ajtó előbb akadt, majd hirtelen szokatlanul könnyen mozgott, utalhat az ajtóhatároló sérülésére vagy rögzítésének lazulására. Ez még nem bizonyított diagnózis.",
+    "Elsőként álló autónál nézd meg az ajtó és a karosszéria közötti ajtóhatároló kart, a csavarokat, illetve a zsanérok környékét. Van-e lelazult alkatrész, törés, ferdeség vagy szokatlan hang?",
+    "Óvatosan ellenőrizd, hogy az ajtó becsukva megbízhatóan reteszelődik-e. Ha lötyög, megereszkedett, nem zár biztosan, vagy valamelyik rögzítés sérült, ne használd az autót a javításig.",
+    "Egy célzott kérdés: nyitáskor az ajtó már nem áll meg a megszokott köztes pozíciókban, és könnyen továbbcsapódik? Vagy maga a zár akad?"
+   ];
+   return (warning?warning+"\n\n":"")+checks.join("\n\n");
+ }
+ if (/f[eé]k|korm[aá]ny|fut[oó]m[uű]|akku|ind[ií]t|h[uű]t[oő]|motor|v[aá]lt[oó]/i.test(context)) {
+   return (warning?warning+"\n\n":"")+"A leírt tünetet vettem alapul, de egyetlen leírásból nem lehet biztos alkatrészhibát megállapítani. Írd meg, hogy álló helyzetben vagy menet közben jelentkezik-e, illetve hallasz-e rendellenes hangot. Ezek alapján célzott ellenőrzési sorrendet adok.\n\nJelenleg szabályalapú segítség működik, nem élő AI-elemzés.";
+ }
+ if (faultCodes.length) {
+   return "Korábban említett OBD-kódok: "+faultCodes.join(", ")+".\n\n"+localAdvice(message);
+ }
+ return (warning?warning+"\n\n":"")+"A korábbi üzeneteidet is figyelembe vettem. A tünet okának szűkítéséhez írd le, pontosan melyik alkatrész viselkedése változott meg, mikor tapasztalod, és jár-e szokatlan hanggal vagy figyelmeztető jelzéssel.\n\nEz egy korlátozott, szabályalapú diagnosztika; az AI-elemzés még nincs bekapcsolva.";
+}

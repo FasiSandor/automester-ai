@@ -3,7 +3,7 @@ import { z } from "zod";
 import { owner } from "@/lib/auth/server";
 import { db } from "@/lib/db";
 export const runtime="nodejs";
-import { localAdvice, safetyWarning } from "@/lib/diagnostics";
+import { contextualAdvice, safetyWarning } from "@/lib/diagnostics";
 const Input=z.object({message:z.string().min(2).max(4000),vehicle:z.string().max(500).optional(),history:z.array(z.object({role:z.enum(["user","assistant"]),content:z.string().max(4000)})).max(12).optional()});
 export async function POST(req:Request) {
  const userId=await owner();
@@ -27,7 +27,7 @@ export async function POST(req:Request) {
      return NextResponse.json({error:"Az AI-korlát ellenőrzése nem sikerült."},{status:503});
    }
  }
- if(!key) { const reply=localAdvice(message); await saveMessages(userId,message,reply,"rules"); return NextResponse.json({reply,mode:"rules",warning:danger}); }
+ if(!key) { const reply=contextualAdvice(message,history,vehicle); await saveMessages(userId,message,reply,"rules"); return NextResponse.json({reply,mode:"rules",warning:danger}); }
  try {
   const url=(process.env.AI_BASE_URL||"https://api.openai.com/v1").replace(/\/$/,"")+"/chat/completions";
   const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),18000);
@@ -40,7 +40,7 @@ export async function POST(req:Request) {
   const output=danger?danger+"\n\n"+reply:reply;
   await saveMessages(userId,message,output,"ai");
   return NextResponse.json({reply:output,mode:"ai",warning:danger});
- } catch { const reply=localAdvice(message); await saveMessages(userId,message,reply,"rules-fallback"); return NextResponse.json({reply,mode:"rules-fallback",warning:danger}); }
+ } catch { const reply=contextualAdvice(message,history,vehicle); await saveMessages(userId,message,reply,"rules-fallback"); return NextResponse.json({reply,mode:"rules-fallback",warning:danger}); }
 }
 
 async function saveMessages(userId:string, question:string, answer:string,mode:string){
